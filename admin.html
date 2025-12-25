@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Admin — Brand Store</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="wrap">
+    <header style="margin-bottom:12px"><a href="index.html">← Store</a></header>
+
+    <h2>Company Settings</h2>
+    <form id="companyForm">
+      <label>Company name <input name="name" required></label>
+      <label>Tagline <input name="tag"></label>
+      <label>Description <textarea name="desc"></textarea></label>
+      <label>Logo (camera or file) <input type="file" name="logoFile" id="logoFile" accept="image/*" capture="environment"></label>
+      <input type="hidden" name="logoData" id="logoData">
+      <div id="logoPreview" style="margin:8px 0;display:none"><img id="logoPreviewImg" src="" alt="logo preview" style="max-height:72px;border-radius:6px;border:1px solid #eef"></div>
+      <button type="submit">Save Company</button>
+    </form>
+
+    <hr>
+    <h2>Products</h2>
+    <form id="productForm">
+      <label>SKU/id <input name="id" required></label>
+      <label>Name <input name="name" required></label>
+      <label>Price <input name="price" type="number" step="0.01" required></label>
+      <label>Image (camera or file) <input type="file" name="imgFile" id="imgFile" accept="image/*" capture="environment"></label>
+      <label>Or Image URL <input name="img" id="imgUrl"></label>
+      <input type="hidden" name="imgData" id="imgData">
+      <div id="imgPreview" style="margin:8px 0;display:none"><img id="imgPreviewImg" src="" alt="preview" style="max-width:180px;border-radius:6px;border:1px solid #eef"></div>
+      <label>Description <textarea name="desc"></textarea></label>
+      <button type="submit">Add / Update Product</button>
+    </form>
+
+    <div id="productList"></div>
+    <hr>
+    <h3>Orders</h3>
+    <div>
+      <button id="refreshOrders" class="secondary">Refresh Orders (server)</button>
+      <button id="clearLocalOrders" class="secondary">Clear Local Orders</button>
+      <button id="clearServerOrders" class="secondary">Clear Server Orders</button>
+      <div id="orders" style="margin-top:8px"></div>
+    </div>
+  </div>
+
+  <script>
+  // admin script (small, inline to keep single file)
+  const LS_PRODUCTS='brand_products_v1',LS_COMPANY='brand_company_v1',LS_ORDERS='brand_orders_v1';
+  const companyForm=document.getElementById('companyForm');
+  const productForm=document.getElementById('productForm');
+  const productList=document.getElementById('productList');
+  const ordersEl=document.getElementById('orders');
+  const imgFileInput = document.getElementById('imgFile');
+  const imgUrlInput = document.getElementById('imgUrl');
+  const imgDataInput = document.getElementById('imgData');
+  const imgPreview = document.getElementById('imgPreview');
+  const imgPreviewImg = document.getElementById('imgPreviewImg');
+  const logoFileInput = document.getElementById('logoFile');
+  const logoDataInput = document.getElementById('logoData');
+  const logoPreview = document.getElementById('logoPreview');
+  const logoPreviewImg = document.getElementById('logoPreviewImg');
+
+  function read(k,f){try{return JSON.parse(localStorage.getItem(k))||f}catch(e){return f}}
+  function write(k,v){localStorage.setItem(k,JSON.stringify(v))}
+
+  function loadCompanyToForm(){
+    const c=read(LS_COMPANY,{});
+    companyForm.name.value=c.name||''; companyForm.tag.value=c.tag||''; companyForm.desc.value=c.desc||'';
+    if (c.logoData){ logoDataInput.value = c.logoData; logoPreviewImg.src = c.logoData; logoPreview.style.display = 'block'; } else { logoPreview.style.display='none'; logoPreviewImg.src=''; }
+  }
+  function renderProducts(){
+    const ps=read(LS_PRODUCTS,[]); productList.innerHTML='';
+    ps.forEach(p=>{
+      const d=document.createElement('div'); d.className='card';
+      d.innerHTML=`<img src="${p.img||'https://picsum.photos/seed/'+encodeURIComponent(p.id)+'/400/300'}" alt="${p.name}" style="width:100%;height:120px;object-fit:cover;border-radius:6px"><strong>${p.name}</strong> — $${p.price.toFixed(2)} <div style="float:right"><button data-edit="${p.id}">Edit</button> <button data-del="${p.id}">Delete</button></div><p>${p.desc||''}</p>`;
+      productList.appendChild(d)
+    });
+    productList.querySelectorAll('button[data-edit]').forEach(b=>b.addEventListener('click',()=>{
+      const id=b.getAttribute('data-edit'); const p=read(LS_PRODUCTS,[]).find(x=>x.id===id);
+      if(p){ productForm.id.value=p.id; productForm.name.value=p.name; productForm.price.value=p.price; imgUrlInput.value = (p.img && p.img.startsWith('data:')) ? '' : (p.img||''); imgDataInput.value = (p.img && p.img.startsWith('data:')) ? p.img : ''; productForm.desc.value=p.desc||''; if(imgDataInput.value){ imgPreviewImg.src = imgDataInput.value; imgPreview.style.display='block'; } else { imgPreview.style.display='none'; imgPreviewImg.src=''; }
+      }
+    }));
+    productList.querySelectorAll('button[data-del]').forEach(b=>b.addEventListener('click',()=>{if(!confirm('Delete product?'))return; const id=b.getAttribute('data-del'); const ps=read(LS_PRODUCTS,[]).filter(x=>x.id!==id); write(LS_PRODUCTS,ps); renderProducts(); }))
+  }
+
+  companyForm.addEventListener('submit',e=>{e.preventDefault(); const fd=new FormData(companyForm); const c=Object.fromEntries(fd.entries()); write(LS_COMPANY,c); alert('Saved'); })
+
+  imgFileInput && imgFileInput.addEventListener('change', ()=>{
+    const f = imgFileInput.files && imgFileInput.files[0];
+    if(!f){ imgPreview.style.display='none'; imgPreviewImg.src=''; return; }
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      const data = reader.result;
+      const tmp = new Image();
+      tmp.onload = ()=>{
+        const minW = 800, minH = 600;
+        if (tmp.width < minW || tmp.height < minH){
+          showAdminToast(`Image too small — needs at least ${minW}×${minH}px`);
+          productForm.querySelector('button[type="submit"]').disabled = true;
+          imgPreview.style.display = 'block';
+          imgPreviewImg.src = data; // still show preview but mark invalid
+          imgPreviewImg.style.filter = 'grayscale(40%) contrast(0.9)';
+          imgPreviewImg.title = `Image too small: ${tmp.width}×${tmp.height}`;
+          imgPreview.dataset.invalid = '1';
+        } else {
+          productForm.querySelector('button[type="submit"]').disabled = false;
+          imgPreviewImg.style.filter = '';
+          imgPreviewImg.title = '';
+          imgPreviewImg.src = data;
+          imgPreview.style.display='block';
+          imgPreview.dataset.invalid = '';
+        }
+        // store data in hidden field so edits keep it
+        imgDataInput.value = data;
+      };
+      tmp.onerror = ()=>{ showAdminToast('Invalid image file'); };
+      tmp.src = data;
+    };
+    reader.readAsDataURL(f);
+  });
+
+  // logo input handling
+  logoFileInput && logoFileInput.addEventListener('change', ()=>{
+    const f = logoFileInput.files && logoFileInput.files[0];
+    if(!f){ logoPreview.style.display='none'; logoPreviewImg.src=''; return; }
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      const data = reader.result;
+      const tmp = new Image();
+      tmp.onload = ()=>{
+        // logo can be smaller but enforce reasonable size
+        const minW = 120, minH = 40;
+        if (tmp.width < minW || tmp.height < minH){
+          showAdminToast(`Logo looks small — recommended at least ${minW}×${minH}px`);
+        }
+        logoPreviewImg.src = data;
+        logoPreview.style.display = 'block';
+        logoDataInput.value = data;
+      };
+      tmp.onerror = ()=>{ showAdminToast('Invalid logo image file'); };
+      tmp.src = data;
+    };
+    reader.readAsDataURL(f);
+  });
+
+  // admin toast implementation
+  const adminToastContainer = document.createElement('div'); adminToastContainer.className='toast-container'; document.body.appendChild(adminToastContainer);
+  function showAdminToast(msg, timeout=3000){
+    const t = document.createElement('div'); t.className='toast'; t.textContent = msg; adminToastContainer.appendChild(t);
+    setTimeout(()=>{ t.style.opacity='0'; setTimeout(()=>t.remove(),200); }, timeout);
+  }
+
+  // live preview when user types/pastes an image URL
+  imgUrlInput && imgUrlInput.addEventListener('input', ()=>{
+    const v = imgUrlInput.value && imgUrlInput.value.trim();
+    if(!v){ if(!imgDataInput.value){ imgPreview.style.display='none'; imgPreviewImg.src=''; } return; }
+    // quick validation for URLs/data: show it
+    imgPreviewImg.src = v;
+    imgPreview.style.display='block';
+  });
+
+  productForm.addEventListener('submit',e=>{
+    e.preventDefault();
+    const f = imgFileInput.files && imgFileInput.files[0];
+    const doSave = (p)=>{
+      p.price = parseFloat(p.price||0);
+      const ps = read(LS_PRODUCTS,[]);
+      const idx = ps.findIndex(x=>x.id===p.id);
+      if(idx>=0) ps[idx] = p; else ps.unshift(p);
+      write(LS_PRODUCTS, ps); renderProducts(); productForm.reset(); imgPreview.style.display='none'; imgPreviewImg.src=''; imgDataInput.value='';
+    };
+    if (f){
+      const reader = new FileReader();
+      reader.onload = ()=>{
+        const fd = new FormData(productForm); const p = Object.fromEntries(fd.entries()); p.img = reader.result; doSave(p);
+      };
+      reader.readAsDataURL(f);
+    } else {
+      const fd = new FormData(productForm); const p = Object.fromEntries(fd.entries());
+      // prefer explicit URL, otherwise keep existing data URL stored in imgData
+      if (!p.img && p.imgData) p.img = p.imgData;
+      // If preview shows invalid flag, block save
+      if (imgPreview.dataset.invalid === '1'){
+        showAdminToast('Please choose a higher-resolution image before saving');
+        return;
+      }
+      p.imgData = undefined; // don't store the hidden field as separate
+      doSave(p);
+    }
+  })
+
+  function renderOrders(){
+    const os=read(LS_ORDERS,[]);
+    ordersEl.innerHTML='';
+    if(!os.length){ordersEl.textContent='No orders yet (local)';}
+    os.forEach(o=>{const d=document.createElement('div'); d.className='card'; d.innerHTML=`<strong>${o.id}</strong> — ${new Date(o.created).toLocaleString()} <div>${o.info.name} — ${o.info.email}</div><div>Total $${o.total.toFixed(2)}</div>`; ordersEl.appendChild(d) })
+  }
+
+  async function fetchServerOrders(){
+    try{
+      const resp = await fetch('/api/orders');
+      if (!resp.ok) throw new Error('no');
+      const j = await resp.json();
+      const list = document.getElementById('orders');
+      if (!j.orders || !j.orders.length){ list.textContent = 'No orders on server'; return; }
+      list.innerHTML = '';
+      j.orders.forEach(o=>{ const d=document.createElement('div'); d.className='card'; d.innerHTML = `<strong>${o.id}</strong> — ${new Date(o.created).toLocaleString()} <div>${o.info && o.info.name ? o.info.name : ''} — ${o.info && o.info.email ? o.info.email : ''}</div><div>Total $${(o.total||0).toFixed(2)}</div><div style="margin-top:6px;color:var(--muted)">Mandate: ${o.mandate && o.mandate.accepted ? 'Accepted' : 'None'}</div>`; list.appendChild(d); });
+    }catch(err){ showAdminToast('Could not fetch server orders: ' + err.message); }
+  }
+
+  document.getElementById('refreshOrders').addEventListener('click', ()=> fetchServerOrders());
+  document.getElementById('clearLocalOrders').addEventListener('click', ()=>{
+    if (!confirm('Clear all local orders? This cannot be undone.')) return;
+    localStorage.removeItem(LS_ORDERS);
+    renderOrders();
+    showAdminToast('Local orders cleared');
+  });
+
+  document.getElementById('clearServerOrders').addEventListener('click', async ()=>{
+    if (!confirm('Clear all server orders? This will remove orders on the server and cannot be undone.')) return;
+    try{
+      const resp = await fetch('/api/clear-orders', { method: 'POST' });
+      if (!resp.ok) throw new Error('Server returned ' + resp.status);
+      const j = await resp.json();
+      showAdminToast(j.msg || 'Server orders cleared');
+      fetchServerOrders();
+    }catch(err){ showAdminToast('Could not clear server orders: ' + err.message); }
+  });
+
+  loadCompanyToForm(); renderProducts(); renderOrders();
+  // attempt initial fetch (no error shown if fails)
+  fetchServerOrders();
+  </script>
+</body>
+</html>

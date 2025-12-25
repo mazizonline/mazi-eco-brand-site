@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Brand Store</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <h1 id="companyName">SPANEA ENTEPRISE</h1>
+      <nav>
+        <a href="admin.html">Admin</a>
+        <button id="viewCart">Cart (<span id="cartCount">0</span>)</button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section id="hero">
+      <h2 id="companyTag">Quality product, made simple.</h2>
+      <p id="companyDesc">Add your company details in the Admin panel.</p>
+    </section>
+
+    <section>
+      <h3>Products</h3>
+      <div id="products" class="grid"></div>
+    </section>
+  </main>
+
+  <div id="cartModal" class="modal" aria-hidden="true">
+    <div class="modal-content">
+      <button id="closeCart" class="close">Close</button>
+      <h3>Your Cart</h3>
+      <div id="cartItems"></div>
+      <div class="cart-actions">
+        <strong>Total: $<span id="cartTotal">0.00</span></strong>
+        <button id="checkoutBtn">Checkout</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="checkoutModal" class="modal" aria-hidden="true">
+    <div class="modal-content">
+      <button id="closeCheckout" class="close">Close</button>
+      <h3>Checkout</h3>
+      <form id="checkoutForm">
+        <label>Name <input name="name" required></label>
+        <label>Email <input name="email" type="email" required></label>
+        <label>Address <textarea name="address" required></textarea></label>
+        <label class="mandate" style="display:block;margin-top:8px">
+          <input type="checkbox" id="mandateCheckbox" name="mandate" required>
+          I authorize <span id="companyNameInline">the company</span> to charge my card and agree to the <a href="#" id="showMandate">payment mandate</a>.
+        </label>
+        <div id="mandateText" style="display:none;margin-top:8px;background:#fafafa;padding:8px;border-radius:6px;color:#222">
+          By providing your payment details and confirming this purchase you authorize the merchant to charge the card used for this order for the amount shown. You may receive a receipt via email. Contact the merchant for refunds or disputes.
+        </div>
+        <button type="submit">Place Order</button>
+      </form>
+      <div id="paymentArea" style="margin-top:12px;">
+        <strong>Payment:</strong>
+        <button id="payOnlineBtn">Pay Online</button>
+        <span id="paymentStatus" style="margin-left:8px;color:var(--muted)"></span>
+      </div>
+      <div id="orderResult" style="display:none"></div>
+    </div>
+  </div>
+
+  <div id="productModal" class="modal" aria-hidden="true">
+    <div class="modal-content">
+      <button id="closeProductModal" class="close">Close</button>
+      <div style="text-align:center">
+        <img id="productModalImg" src="" alt="" style="max-width:100%;height:auto;border-radius:8px;">
+        <h3 id="productModalTitle" style="margin-top:12px"></h3>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+  <footer style="text-align:center;padding:18px 8px;color:var(--muted);font-size:0.95rem;background:transparent">
+    <div class="wrap">Designe by — <a href="https://mazizonline.net" target="_blank" rel="noopener" style="color:var(--brand-700);text-decoration:none">Mazizonline.net</a></div>
+  </footer>
+</body>
+</html>

@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Payment Success</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="wrap form-white" style="margin-top:40px;text-align:center">
+    <h2>Payment Successful</h2>
+    <p>Thank you — your payment completed successfully. You may close this window and return to the store.</p>
+    <p id="orderInfo"></p>
+    <p><a href="/">Return to store</a></p>
+  </main>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const order = params.get('order');
+    if (order) document.getElementById('orderInfo').textContent = 'Order: ' + order;
+  </script>
+</body>
+</html>
