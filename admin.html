@@ -8,7 +8,7 @@
 </head>
 <body>
   <div class="wrap">
-    <header style="margin-bottom:12px"><a href="index.html">← Store</a></header>
+    <header style="margin-bottom:12px"><a href="index.html">← Store</a> <span style="float:right"><a id="adminLogout" href="#" style="color:var(--brand-700);text-decoration:none">Logout</a></span></header>
 
     <h2>Company Settings</h2>
     <form id="companyForm">
@@ -35,6 +35,12 @@
       <button type="submit">Add / Update Product</button>
     </form>
 
+    <h3>Bulk Import</h3>
+    <p style="margin:0 0 8px;color:var(--muted);font-size:0.95rem">Paste CSV lines: <strong>id,name,price,img,desc</strong> or leave image blank to use file/preview.</p>
+    <textarea id="bulkCsv" placeholder="p3,Blue Hat,14.99,https://example.com/hat.jpg,Classic blue hat" style="width:100%;min-height:80px;margin-bottom:8px"></textarea>
+    <div style="margin-bottom:12px"><button id="importCsvBtn">Import CSV</button></div>
+    <div style="margin-bottom:12px"><button id="generateSamplesBtn" class="secondary">Generate 50 Demo Products</button></div>
+
     <div id="productList"></div>
     <hr>
     <h3>Orders</h3>
@@ -47,6 +53,14 @@
   </div>
 
   <script>
+  // Require admin auth
+  (function(){
+    try{
+      if (localStorage.getItem('brand_admin_auth') !== '1'){
+        location.href = 'login.html';
+      }
+    }catch(e){ location.href = 'login.html'; }
+  })();
   // admin script (small, inline to keep single file)
   const LS_PRODUCTS='brand_products_v1',LS_COMPANY='brand_company_v1',LS_ORDERS='brand_orders_v1';
   const companyForm=document.getElementById('companyForm');
@@ -196,18 +210,46 @@
     const os=read(LS_ORDERS,[]);
     ordersEl.innerHTML='';
     if(!os.length){ordersEl.textContent='No orders yet (local)';}
-    os.forEach(o=>{const d=document.createElement('div'); d.className='card'; d.innerHTML=`<strong>${o.id}</strong> — ${new Date(o.created).toLocaleString()} <div>${o.info.name} — ${o.info.email}</div><div>Total $${o.total.toFixed(2)}</div>`; ordersEl.appendChild(d) })
+    os.forEach(o=>{
+      const d=document.createElement('div'); d.className='card';
+      const name = o.info && o.info.name ? o.info.name : '';
+      const email = o.info && o.info.email ? o.info.email : '';
+      const phone = o.info && o.info.phone ? o.info.phone : '';
+      const loc = o.info && o.info.location ? o.info.location : '';
+      let locHtml = '';
+      if (loc){
+        const m = loc.match(/(-?\d+\.\d+),\s*(-?\d+\.\d+)/);
+        if (m){ locHtml = `<div>Location: <a href="https://www.google.com/maps?q=${m[1]},${m[2]}" target="_blank">${m[1]},${m[2]}</a></div>`; }
+        else { locHtml = `<div>Location: ${loc}</div>`; }
+      }
+      d.innerHTML = `<strong>${o.id}</strong> — ${new Date(o.created).toLocaleString()} <div>${name} — ${email} ${phone? ' — <a href="tel:'+phone+'">'+phone+'</a>':''}</div><div>Total $${(o.total||0).toFixed(2)}</div>${locHtml}`;
+      ordersEl.appendChild(d);
+    })
   }
 
   async function fetchServerOrders(){
     try{
-      const resp = await fetch('/api/orders');
+      const resp = await fetch((window.__BRAND_API_BASE__ || 'http://localhost:9000') + '/api/orders');
       if (!resp.ok) throw new Error('no');
       const j = await resp.json();
       const list = document.getElementById('orders');
       if (!j.orders || !j.orders.length){ list.textContent = 'No orders on server'; return; }
       list.innerHTML = '';
-      j.orders.forEach(o=>{ const d=document.createElement('div'); d.className='card'; d.innerHTML = `<strong>${o.id}</strong> — ${new Date(o.created).toLocaleString()} <div>${o.info && o.info.name ? o.info.name : ''} — ${o.info && o.info.email ? o.info.email : ''}</div><div>Total $${(o.total||0).toFixed(2)}</div><div style="margin-top:6px;color:var(--muted)">Mandate: ${o.mandate && o.mandate.accepted ? 'Accepted' : 'None'}</div>`; list.appendChild(d); });
+      j.orders.forEach(o=>{
+        const d=document.createElement('div'); d.className='card';
+        const name = o.info && o.info.name ? o.info.name : '';
+        const email = o.info && o.info.email ? o.info.email : '';
+        const phone = o.info && o.info.phone ? o.info.phone : '';
+        const loc = o.info && o.info.location ? o.info.location : '';
+        let locHtml = '';
+        if (loc){
+          const m = String(loc).match(/(-?\d+\.\d+),\s*(-?\d+\.\d+)/);
+          if (m){ locHtml = `<div>Location: <a href="https://www.google.com/maps?q=${m[1]},${m[2]}" target="_blank">${m[1]},${m[2]}</a></div>`; }
+          else { locHtml = `<div>Location: ${loc}</div>`; }
+        }
+        d.innerHTML = `<strong>${o.id}</strong> — ${new Date(o.created).toLocaleString()} <div>${name} — ${email} ${phone? ' — <a href="tel:'+phone+'">'+phone+'</a>':''}</div><div>Total $${(o.total||0).toFixed(2)}</div>${locHtml}<div style="margin-top:6px;color:var(--muted)">Mandate: ${o.mandate && o.mandate.accepted ? 'Accepted' : 'None'}</div>`;
+        list.appendChild(d);
+      });
     }catch(err){ showAdminToast('Could not fetch server orders: ' + err.message); }
   }
 
@@ -223,16 +265,69 @@
     if (!confirm('Clear all server orders? This will remove orders on the server and cannot be undone.')) return;
     try{
       const resp = await fetch('/api/clear-orders', { method: 'POST' });
-      if (!resp.ok) throw new Error('Server returned ' + resp.status);
-      const j = await resp.json();
-      showAdminToast(j.msg || 'Server orders cleared');
-      fetchServerOrders();
+        const j = await resp.json();
+        showAdminToast(j.msg || 'Server orders cleared');
+        fetchServerOrders();
     }catch(err){ showAdminToast('Could not clear server orders: ' + err.message); }
   });
 
   loadCompanyToForm(); renderProducts(); renderOrders();
   // attempt initial fetch (no error shown if fails)
   fetchServerOrders();
+  // Bulk CSV import handler
+  const importBtn = document.getElementById('importCsvBtn');
+  const bulkCsv = document.getElementById('bulkCsv');
+  importBtn && importBtn.addEventListener('click', ()=>{
+    const v = (bulkCsv.value||'').trim();
+    if(!v){ showAdminToast('No CSV data to import'); return; }
+    const lines = v.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+    const added = [];
+    const ps = read(LS_PRODUCTS,[]);
+    for(const line of lines){
+      // split on comma, but allow comma in description by limiting to 5 parts
+      const parts = line.split(',');
+      if(parts.length < 3) continue;
+      const id = parts[0].trim();
+      const name = parts[1] ? parts[1].trim() : '';
+      const price = parseFloat(parts[2]) || 0;
+      const img = parts[3] ? parts[3].trim() : '';
+      const desc = parts.slice(4).join(',').trim();
+      if(!id || !name) continue;
+      const existing = ps.find(x=>x.id===id);
+      const p = {id,name,price,desc,img: img || (existing && existing.img) || ''};
+      if(existing){ Object.assign(existing,p); } else { ps.unshift(p); }
+      added.push(id);
+    }
+    write(LS_PRODUCTS, ps);
+    renderProducts();
+    showAdminToast(`Imported ${added.length} products`);
+    bulkCsv.value = '';
+  });
+  // Generate many demo products for browsing
+  const genBtn = document.getElementById('generateSamplesBtn');
+  genBtn && genBtn.addEventListener('click', ()=>{
+    const COUNT = 50;
+    const ps = read(LS_PRODUCTS,[]);
+    // find a numeric start that doesn't clash
+    let start = 1; while(ps.some(x=>x.id===('demo'+start))) start += 1;
+    const added = [];
+    for(let i=0;i<COUNT;i++){
+      const id = 'demo'+(start+i);
+      if (ps.find(x=>x.id===id)) continue;
+      const price = Number((Math.random()*90 + 5).toFixed(2));
+      const p = { id, name: `Demo Product ${start+i}`, price, desc: 'Demo product for browsing', img: `https://picsum.photos/seed/${encodeURIComponent(id)}/400/300` };
+      ps.push(p);
+      added.push(id);
+    }
+    write(LS_PRODUCTS, ps);
+    renderProducts();
+    showAdminToast(`Added ${added.length} demo products`);
+  });
+  // Logout handler
+  const logoutLink = document.getElementById('adminLogout');
+  if (logoutLink){
+    logoutLink.addEventListener('click', (e)=>{ e.preventDefault(); localStorage.removeItem('brand_admin_auth'); location.href='login.html'; });
+  }
   </script>
 </body>
 </html>

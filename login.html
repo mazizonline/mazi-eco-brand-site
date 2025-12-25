@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Admin Login</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="wrap" style="max-width:420px;margin-top:36px">
+    <h2>Admin Login</h2>
+    <form id="loginForm">
+      <label>Admin password <input name="password" type="password" required></label>
+      <label style="font-size:0.95rem;color:var(--muted)"><input type="checkbox" id="setAsPw"> Set as new admin password</label>
+      <div style="margin-top:12px">
+        <button type="submit">Sign in</button>
+        <a href="index.html" style="margin-left:12px;color:var(--brand-700);text-decoration:none">Back to store</a>
+      </div>
+    </form>
+    <div style="margin-top:12px;color:var(--muted);font-size:0.95rem">Default password (first run) is <strong>admin</strong>. You can change it by checking "Set as new admin password".</div>
+  </div>
+
+  <script>
+  const form = document.getElementById('loginForm');
+  const setAs = document.getElementById('setAsPw');
+  form.addEventListener('submit', e => {
+    e.preventDefault();
+    const pw = (form.password.value || '').trim();
+    if (!pw) return;
+    const stored = localStorage.getItem('brand_admin_pw');
+    if (setAs.checked){
+      localStorage.setItem('brand_admin_pw', pw);
+      localStorage.setItem('brand_admin_auth','1');
+      location.href = 'admin.html';
+      return;
+    }
+    const expected = stored || 'admin';
+    if (pw === expected){
+      localStorage.setItem('brand_admin_auth','1');
+      location.href = 'admin.html';
+    } else {
+      alert('Incorrect password');
+    }
+  });
+  </script>
+</body>
+</html>

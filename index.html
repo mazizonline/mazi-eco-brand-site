@@ -21,6 +21,9 @@
     <section id="hero">
       <h2 id="companyTag">Quality product, made simple.</h2>
       <p id="companyDesc">Add your company details in the Admin panel.</p>
+      <div style="margin-top:12px">
+        <button id="heroShopBtn" class="secondary">Shop Now</button>
+      </div>
     </section>
 
     <section>
@@ -46,10 +49,18 @@
       <button id="closeCheckout" class="close">Close</button>
       <h3>Checkout</h3>
       <form id="checkoutForm">
-        <label>Name <input name="name" required></label>
-        <label>Email <input name="email" type="email" required></label>
-        <label>Address <textarea name="address" required></textarea></label>
-        <label class="mandate" style="display:block;margin-top:8px">
+        <div class="checkout-grid">
+          <label>Name <input name="name" required></label>
+          <label>Phone <input name="phone" type="tel" required placeholder="e.g. +1234567890"></label>
+          <label>Email <input name="email" type="email" required></label>
+          <label>Address <textarea name="address" required></textarea></label>
+        </div>
+        <div style="margin-top:8px;margin-bottom:6px">
+          <button type="button" id="detectLocationBtn" class="secondary">Detect My Location</button>
+          <small style="margin-left:8px;color:var(--muted)"><span id="locationStatus">No location</span></small>
+          <input type="hidden" name="location" id="locationInput">
+        </div>
+        <label class="mandate" style="display:block;margin-top:8px;color:#07142a">
           <input type="checkbox" id="mandateCheckbox" name="mandate" required>
           I authorize <span id="companyNameInline">the company</span> to charge my card and agree to the <a href="#" id="showMandate">payment mandate</a>.
         </label>

@@ -21,6 +21,7 @@ const cartCountEl = document.getElementById('cartCount');
 const cartModal = document.getElementById('cartModal');
 const viewCartBtn = document.getElementById('viewCart');
 const closeCartBtn = document.getElementById('closeCart');
+const SERVER_BASE = window.__BRAND_API_BASE__ || 'http://localhost:9000';
 const cartItemsEl = document.getElementById('cartItems');
 const cartTotalEl = document.getElementById('cartTotal');
 const checkoutBtn = document.getElementById('checkoutBtn');
@@ -39,6 +40,9 @@ const checkoutForm = document.getElementById('checkoutForm');
 const orderResult = document.getElementById('orderResult');
 const payOnlineBtn = document.getElementById('payOnlineBtn');
 const paymentStatus = document.getElementById('paymentStatus');
+const detectLocationBtn = document.getElementById('detectLocationBtn');
+const locationInput = document.getElementById('locationInput');
+const locationStatus = document.getElementById('locationStatus');
 
 // product image modal
 const productModal = document.getElementById('productModal');
@@ -52,6 +56,10 @@ function openProductModal(src, title){
   productModalTitle.textContent = title || '';
   productModal.setAttribute('aria-hidden','false');
 }
+
+// hero CTA scroll
+const heroShopBtn = document.getElementById('heroShopBtn');
+if (heroShopBtn){ heroShopBtn.addEventListener('click', ()=>{ const el = document.getElementById('products'); if (el) el.scrollIntoView({behavior:'smooth',block:'start'}); }); }
 
 function readJSON(key, fallback) {
   try { return JSON.parse(localStorage.getItem(key)) || fallback; } catch (e) { return fallback; }
@@ -155,35 +163,32 @@ checkoutForm && checkoutForm.addEventListener('submit', (e)=>{
   e.preventDefault();
   const fd = new FormData(checkoutForm); const info = Object.fromEntries(fd.entries());
   const cart = getCart(); if (Object.keys(cart).length===0){ alert('Cart is empty'); return; }
+  // basic phone presence check
+  if (!info.phone || !info.phone.trim()){ alert('Please provide a phone number so we can contact you'); return; }
   const products = readJSON(LS_PRODUCTS, []);
   const items = [];
   let total = 0;
   for (const [id,qty] of Object.entries(cart)){
     const p = products.find(x=>x.id===id); if(!p) continue; items.push({id:p.id,name:p.name,price:p.price,qty}); total += p.price*qty;
   }
-  // Gather mandate info from form
   const mandateEl = document.getElementById('mandateCheckbox');
   const mandateTextEl = document.getElementById('mandateText');
   const mandate = { accepted: !!(mandateEl && mandateEl.checked), text: mandateTextEl ? mandateTextEl.textContent.trim() : '' };
 
-  // Try to send order to server if available (kept for form submit)
   (async ()=>{
     const payload = { info, items, total, mandate };
     try{
-      const resp = await fetch('/api/create-order', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
-      if (resp.ok){
-        const j = await resp.json();
-        // clear cart and show result
-        localStorage.removeItem(LS_CART); updateCartCount();
+      const j = await createOrderOnServer(payload);
+      if (j && j.sessionUrl){
         checkoutForm.reset(); checkoutForm.style.display='none'; orderResult.style.display='block';
-        if (j.sessionUrl){
-          orderResult.innerHTML = `<p>Proceed to payment to complete order <a href="${j.sessionUrl}" target="_blank">Pay now</a></p>`;
-          showToast('Order created — opening payment',4000);
-          window.open(j.sessionUrl, '_blank');
-        } else {
-          orderResult.innerHTML = `<p>Thanks! Order <strong>${j.orderId}</strong> placed. Total $${total.toFixed(2)}</p>`;
-          showToast('Order placed — ' + j.orderId, 4000);
-        }
+        orderResult.innerHTML = `<p>Proceed to payment to complete order <a href="${j.sessionUrl}" target="_blank">Pay now</a></p>`;
+        showToast('Order created — opening payment',4000);
+        window.open(j.sessionUrl, '_blank');
+        return;
+      } else if (j && j.orderId){
+        checkoutForm.reset(); checkoutForm.style.display='none'; orderResult.style.display='block';
+        orderResult.innerHTML = `<p>Thanks! Order <strong>${j.orderId}</strong> placed. Total $${total.toFixed(2)}</p>`;
+        showToast('Order placed — ' + j.orderId, 4000);
         return;
       }
     }catch(err){ console.warn('Server order failed, falling back to local storage', err); }
@@ -200,11 +205,10 @@ checkoutForm && checkoutForm.addEventListener('submit', (e)=>{
 
 // Helper to attempt server order creation and return JSON (throws on network error)
 async function createOrderOnServer(payload){
-  const resp = await fetch('/api/create-order', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+  const resp = await fetch(`${SERVER_BASE}/api/create-order`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
   if (!resp.ok) throw new Error('Server returned ' + resp.status);
   return resp.json();
 }
-
 // Pay Online button: collects checkout form fields and attempts to create a server session
 if (payOnlineBtn){
   payOnlineBtn.addEventListener('click', async ()=>{
@@ -231,7 +235,6 @@ if (payOnlineBtn){
       if (j.sessionUrl){
         paymentStatus.innerHTML = `Open payment: <a href="${j.sessionUrl}" target="_blank">Pay now</a>`;
         showToast('Opening payment',3000);
-        window.open(j.sessionUrl, '_blank');
       } else {
         paymentStatus.textContent = `Order created: ${j.orderId} (no payment configured)`;
       }
@@ -256,11 +259,10 @@ seedIfEmpty(); loadCompany(); renderProducts(); updateCartCount();
 async function checkServerStatus(){
   if (!payOnlineBtn) return;
   try{
-    const resp = await fetch('/api/status');
+    const resp = await fetch(`${SERVER_BASE}/api/status`);
     if (!resp.ok) throw new Error('bad');
     const j = await resp.json();
     if (j && j.stripe){
-      payOnlineBtn.style.display = 'inline-block';
       paymentStatus.textContent = '';
     } else {
       payOnlineBtn.style.display = 'none';
@@ -273,3 +275,24 @@ async function checkServerStatus(){
 }
 
 checkServerStatus();
+
+// Location detection handler: fills hidden `location` field as "lat,lng" and updates status
+if (detectLocationBtn){
+  detectLocationBtn.addEventListener('click', ()=>{
+    if (!navigator.geolocation){
+      if (locationStatus) locationStatus.textContent = 'Geolocation not supported';
+      return;
+    }
+    if (locationStatus) locationStatus.textContent = 'Detecting…';
+    navigator.geolocation.getCurrentPosition((pos)=>{
+      const lat = pos.coords.latitude.toFixed(6), lon = pos.coords.longitude.toFixed(6);
+      if (locationInput) locationInput.value = `${lat},${lon}`;
+      if (locationStatus) locationStatus.textContent = `Location set: ${lat},${lon}`;
+      showToast('Location detected');
+    }, (err)=>{
+      if (locationStatus) locationStatus.textContent = 'Location denied/failed';
+      showToast('Could not detect location');
+      console.warn('Geolocation error', err);
+    }, { enableHighAccuracy:false, timeout:10000 });
+  });
+}
